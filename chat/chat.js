@@ -16,10 +16,6 @@ app.controller('ChatCtrl', function Chat($scope, $firebase) {
   // Get the chat messages as an array
   $scope.messages = messagesSync.$asArray();
 
-  // Verify that $inst() works
-  verify($scope.chat.$inst() === chatSync, "Something is wrong with $FirebaseObject.$inst().");
-  verify($scope.messages.$inst() === messagesSync, "Something is wrong with $FirebaseArray.$inst().");
-
   // Initialize $scope variables
   $scope.message = "";
   $scope.username = 'Guest' + Math.floor(Math.random() * 101);

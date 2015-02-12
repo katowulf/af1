@@ -8,9 +8,10 @@ completed or to stop at any time if you do not think you can complete the task.
 # Migration notes
 
     $firebase has been removed
-     - use Firebase ref directly for write methods
-     - create arrays with new $FirebaseArray instead of $asArray()
-     - create objects with new $FirebaseObject instead of $asObject()
+    - use Firebase ref directly for set(), push(), transaction(), and remove() ops without creating a FirebaseArray or FirebaseObject
+    - create arrays with new $FirebaseArray instead of $asArray()
+    - create objects with new $FirebaseObject instead of $asObject()
+    $inst() was removed (use $ref() to get to the Firebase ref)
     Added error message for array-like data
     Fixed bug with $value not being removed
     Improved Jasmine/Travis consistency

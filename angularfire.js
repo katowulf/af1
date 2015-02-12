@@ -84,6 +84,9 @@
        * @constructor
        */
       function FirebaseArray(ref) {
+        if( !angular.isDefined(this) ) {
+          return new FirebaseArray(ref);
+        }
         var self = this;
         this._observers = [];
         this.$list = [];
@@ -1212,6 +1215,9 @@
        * @constructor
        */
       function FirebaseObject(ref) {
+        if( !angular.isDefined(this) ) {
+          return new FirebaseObject(ref);
+        }
         // These are private config props and functions used internally
         // they are collected here to reduce clutter in console.log and forEach
         this.$$conf = {
