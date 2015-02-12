@@ -5,6 +5,16 @@ No wait, the purpose is to get feedback on how well we've implemented the new AP
 Please complete the following tasks, in order. Be sure to tell us when you think the task is
 completed or to stop at any time if you do not think you can complete the task.
 
+# Migration notes
+
+    $firebase has been removed
+     - use Firebase ref directly for write methods
+     - create arrays with new $FirebaseArray instead of $asArray()
+     - create objects with new $FirebaseObject instead of $asObject()
+    Added error message for array-like data
+    Fixed bug with $value not being removed
+    Improved Jasmine/Travis consistency
+
 # Task 1: Migrate Chat App from 0.9.2 to 1.0
 
  1. Open chat/chat.html
