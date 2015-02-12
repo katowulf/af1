@@ -84,7 +84,7 @@
        * @constructor
        */
       function FirebaseArray(ref) {
-        if( !angular.isDefined(this) ) {
+        if( !(this instanceof FirebaseArray) ) {
           return new FirebaseArray(ref);
         }
         var self = this;
@@ -1215,7 +1215,7 @@
        * @constructor
        */
       function FirebaseObject(ref) {
-        if( !angular.isDefined(this) ) {
+        if( !(this instanceof FirebaseObject) ) {
           return new FirebaseObject(ref);
         }
         // These are private config props and functions used internally
