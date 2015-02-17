@@ -4,9 +4,9 @@
  * provides you with the $firebase service which allows you to easily keep your $scope
  * variables in sync with your Firebase backend.
  *
- * AngularFire 1.0.0 pre-release
+ * AngularFire 0.0.0
  * https://github.com/firebase/angularfire/
- * Date: 02/12/2015
+ * Date: 02/17/2015
  * License: MIT
  */
 (function(exports) {
@@ -31,12 +31,16 @@
 (function() {
   'use strict';
   /**
-   * Creates and maintains a synchronized list of data. This constructor should not be
-   * manually invoked. Instead, one should create a $firebase object and call $asArray
-   * on it:  <code>$firebase( firebaseRef ).$asArray()</code>;
+   * Creates and maintains a synchronized list of data. This is a pseudo-read-only array. One should
+   * not call splice(), push(), pop(), et al directly on this array, but should instead use the
+   * $remove and $add methods.
    *
-   * Internally, the $firebase object depends on this class to provide 5 $$ methods, which it invokes
-   * to notify the array whenever a change has been made at the server:
+   * It is acceptable to .sort() this array, but it is important to use this in conjunction with
+   * $watch(), so that it will be re-sorted any time the server data changes. Examples of this are
+   * included in the $watch documentation.
+   *
+   * Internally, the $firebase object depends on this class to provide several $$ (i.e. protected)
+   * methods, which it invokes to notify the array whenever a change has been made at the server:
    *    $$added - called whenever a child_added event occurs
    *    $$updated - called whenever a child_changed event occurs
    *    $$moved - called whenever a child_moved event occurs
@@ -52,10 +56,10 @@
    *
    * Instead of directly modifying this class, one should generally use the $extend
    * method to add or change how methods behave. $extend modifies the prototype of
-   * the array class by returning a clone of $FirebaseArray.
+   * the array class by returning a clone of $firebaseArray.
    *
    * <pre><code>
-   * var ExtendedArray = $FirebaseArray.$extend({
+   * var ExtendedArray = $firebaseArray.$extend({
    *    // add a new method to the prototype
    *    foo: function() { return 'bar'; },
    *
@@ -73,7 +77,7 @@
    * var list = new ExtendedArray(ref);
    * </code></pre>
    */
-  angular.module('firebase').factory('$FirebaseArray', ["$log", "$firebaseUtils",
+  angular.module('firebase').factory('$firebaseArray', ["$log", "$firebaseUtils",
     function($log, $firebaseUtils) {
       /**
        * This constructor should probably never be called manually. It is used internally by
@@ -94,7 +98,7 @@
         this._sync = new ArraySyncManager(this);
 
         $firebaseUtils.assertValidRef(ref, 'Must pass a valid Firebase reference ' +
-        'to $FirebaseArray (not a string or URL)');
+        'to $firebaseArray (not a string or URL)');
 
         // indexCache is a weak hashmap (a lazy list) of keys to array indices,
         // items are not guaranteed to stay up to date in this list (since the data
@@ -565,7 +569,7 @@
          */
         _assertNotDestroyed: function(method) {
           if( this._isDestroyed ) {
-            throw new Error('Cannot call ' + method + ' method on a destroyed $FirebaseArray object');
+            throw new Error('Cannot call ' + method + ' method on a destroyed $firebaseArray object');
           }
         }
       };
@@ -581,7 +585,7 @@
        * methods to add onto the prototype.
        *
        *  <pre><code>
-       * var ExtendedArray = $FirebaseArray.$extend({
+       * var ExtendedArray = $firebaseArray.$extend({
        *    // add a method onto the prototype that sums all items in the array
        *    getSum: function() {
        *       var ct = 0;
@@ -590,7 +594,7 @@
        *    }
        * });
        *
-       * // use our new factory in place of $FirebaseArray
+       * // use our new factory in place of $firebaseArray
        * var list = new ExtendedArray(ref);
        * </code></pre>
        *
@@ -705,6 +709,16 @@
       return FirebaseArray;
     }
   ]);
+
+  /** @deprecated */
+  angular.module('firebase').factory('$FirebaseArray', ['$log', '$firebaseArray',
+    function($log, $firebaseArray) {
+      return function() {
+        $log.warn('$FirebaseArray has been renamed. Use $firebaseArray instead.');
+        return $firebaseArray.apply(null, arguments);
+      };
+    }
+  ]);
 })();
 
 (function() {
@@ -762,8 +776,7 @@
         $changePassword: this.changePassword.bind(this),
         $changeEmail: this.changeEmail.bind(this),
         $removeUser: this.removeUser.bind(this),
-        $resetPassword: this.resetPassword.bind(this),
-        $sendPasswordResetEmail: this.sendPasswordResetEmail.bind(this)
+        $resetPassword: this.resetPassword.bind(this)
       };
 
       return this._object;
@@ -1012,24 +1025,16 @@
      * wish to log in as the newly created user, call $authWithPassword() after the promise for
      * this method has been resolved.
      *
-     * @param {Object|string} emailOrCredentials The email of the user to create or an object
-     * containing the email and password of the user to create.
-     * @param {string} [password] The password for the user to create.
+     * @param {Object} credentials An object containing the email and password of the user to create.
      * @return {Promise<Object>} A promise fulfilled with the user object, which contains the
      * uid of the created user.
      */
-    createUser: function(emailOrCredentials, password) {
+    createUser: function(credentials) {
       var deferred = this._q.defer();
 
-      // Allow this method to take a single credentials argument or two separate string arguments
-      var credentials = emailOrCredentials;
-      if (typeof emailOrCredentials === "string") {
-        this._log.warn("Passing in credentials to $createUser() as individual arguments has been deprecated in favor of a single credentials argument. See the AngularFire API reference for details.");
-
-        credentials = {
-          email: emailOrCredentials,
-          password: password
-        };
+      // Throw an error if they are trying to pass in separate string arguments
+      if (typeof credentials === "string") {
+        throw new Error("$createUser() expects an object containing 'email' and 'password', but got a string.");
       }
 
       try {
@@ -1044,26 +1049,16 @@
     /**
      * Changes the password for an email/password user.
      *
-     * @param {Object|string} emailOrCredentials The email of the user whose password is to change
-     * or an object containing the email, old password, and new password of the user whose password
-     * is to change.
-     * @param {string} [oldPassword] The current password for the user.
-     * @param {string} [newPassword] The new password for the user.
+     * @param {Object} credentials An object containing the email, old password, and new password of
+     * the user whose password is to change.
      * @return {Promise<>} An empty promise fulfilled once the password change is complete.
      */
-    changePassword: function(emailOrCredentials, oldPassword, newPassword) {
+    changePassword: function(credentials) {
       var deferred = this._q.defer();
 
-      // Allow this method to take a single credentials argument or three separate string arguments
-      var credentials = emailOrCredentials;
-      if (typeof emailOrCredentials === "string") {
-        this._log.warn("Passing in credentials to $changePassword() as individual arguments has been deprecated in favor of a single credentials argument. See the AngularFire API reference for details.");
-
-        credentials = {
-          email: emailOrCredentials,
-          oldPassword: oldPassword,
-          newPassword: newPassword
-        };
+      // Throw an error if they are trying to pass in separate string arguments
+      if (typeof credentials === "string") {
+        throw new Error("$changePassword() expects an object containing 'email', 'oldPassword', and 'newPassword', but got a string.");
       }
 
       try {
@@ -1084,7 +1079,7 @@
      */
     changeEmail: function(credentials) {
       if (typeof this._ref.changeEmail !== 'function') {
-        throw new Error('$firebaseAuth.$changeEmail() requires Firebase version 2.1.0 or greater.');
+        throw new Error("$changeEmail() expects an object containing 'oldEmail', 'newEmail', and 'password', but got a string.");
       }
 
       var deferred = this._q.defer();
@@ -1101,23 +1096,15 @@
     /**
      * Removes an email/password user.
      *
-     * @param {Object|string} emailOrCredentials The email of the user to remove or an object
-     * containing the email and password of the user to remove.
-     * @param {string} [password] The password of the user to remove.
+     * @param {Object} credentials An object containing the email and password of the user to remove.
      * @return {Promise<>} An empty promise fulfilled once the user is removed.
      */
-    removeUser: function(emailOrCredentials, password) {
+    removeUser: function(credentials) {
       var deferred = this._q.defer();
 
-      // Allow this method to take a single credentials argument or two separate string arguments
-      var credentials = emailOrCredentials;
-      if (typeof emailOrCredentials === "string") {
-        this._log.warn("Passing in credentials to $removeUser() as individual arguments has been deprecated in favor of a single credentials argument. See the AngularFire API reference for details.");
-
-        credentials = {
-          email: emailOrCredentials,
-          password: password
-        };
+      // Throw an error if they are trying to pass in separate string arguments
+      if (typeof credentials === "string") {
+        throw new Error("$removeUser() expects an object containing 'email' and 'password', but got a string.");
       }
 
       try {
@@ -1129,44 +1116,20 @@
       return deferred.promise;
     },
 
-    /**
-     * Sends a password reset email to an email/password user. [DEPRECATED]
-     *
-     * @deprecated
-     * @param {Object|string} emailOrCredentials The email of the user to send a reset password
-     * email to or an object containing the email of the user to send a reset password email to.
-     * @return {Promise<>} An empty promise fulfilled once the reset password email is sent.
-     */
-    sendPasswordResetEmail: function(emailOrCredentials) {
-      this._log.warn("$sendPasswordResetEmail() has been deprecated in favor of the equivalent $resetPassword().");
-
-      try {
-        return this.resetPassword(emailOrCredentials);
-      } catch (error) {
-        return this._q(function(resolve, reject) {
-          return reject(error);
-        });
-      }
-    },
 
     /**
      * Sends a password reset email to an email/password user.
      *
-     * @param {Object|string} emailOrCredentials The email of the user to send a reset password
-     * email to or an object containing the email of the user to send a reset password email to.
+     * @param {Object} credentials An object containing the email of the user to send a reset
+     * password email to.
      * @return {Promise<>} An empty promise fulfilled once the reset password email is sent.
      */
-    resetPassword: function(emailOrCredentials) {
+    resetPassword: function(credentials) {
       var deferred = this._q.defer();
 
-      // Allow this method to take a single credentials argument or a single string argument
-      var credentials = emailOrCredentials;
-      if (typeof emailOrCredentials === "string") {
-        this._log.warn("Passing in credentials to $resetPassword() as individual arguments has been deprecated in favor of a single credentials argument. See the AngularFire API reference for details.");
-
-        credentials = {
-          email: emailOrCredentials
-        };
+      // Throw an error if they are trying to pass in a string argument
+      if (typeof credentials === "string") {
+        throw new Error("$resetPassword() expects an object containing 'email', but got a string.");
       }
 
       try {
@@ -1196,7 +1159,7 @@
    * method to add or change how methods behave:
    *
    * <pre><code>
-   * var ExtendedObject = $FirebaseObject.$extend({
+   * var ExtendedObject = $firebaseObject.$extend({
    *    // add a new method to the prototype
    *    foo: function() { return 'bar'; },
    * });
@@ -1204,7 +1167,7 @@
    * var obj = new ExtendedObject(ref);
    * </code></pre>
    */
-  angular.module('firebase').factory('$FirebaseObject', [
+  angular.module('firebase').factory('$firebaseObject', [
     '$parse', '$firebaseUtils', '$log',
     function($parse, $firebaseUtils, $log) {
       /**
@@ -1451,14 +1414,14 @@
        * `objectFactory` parameter:
        *
        * <pre><code>
-       * var MyFactory = $FirebaseObject.$extend({
+       * var MyFactory = $firebaseObject.$extend({
        *    // add a method onto the prototype that prints a greeting
        *    getGreeting: function() {
        *       return 'Hello ' + this.first_name + ' ' + this.last_name + '!';
        *    }
        * });
        *
-       * // use our new factory in place of $FirebaseObject
+       * // use our new factory in place of $firebaseObject
        * var obj = $firebase(ref, {objectFactory: MyFactory}).$asObject();
        * </code></pre>
        *
@@ -1597,7 +1560,7 @@
           ref.on('value', applyUpdate, error);
           ref.once('value', function(snap) {
             if (angular.isArray(snap.val())) {
-              $log.warn('Storing data using array indices in Firebase can result in unexpected behavior. See https://www.firebase.com/docs/web/guide/understanding-data.html#section-arrays-in-firebase for more information. Also note that you probably wanted $FirebaseArray and not $FirebaseObject.');
+              $log.warn('Storing data using array indices in Firebase can result in unexpected behavior. See https://www.firebase.com/docs/web/guide/understanding-data.html#section-arrays-in-firebase for more information. Also note that you probably wanted $firebaseArray and not $firebaseObject.');
             }
 
             initComplete(null);
@@ -1639,6 +1602,16 @@
       return FirebaseObject;
     }
   ]);
+
+  /** @deprecated */
+  angular.module('firebase').factory('$FirebaseObject', ['$log', '$firebaseObject',
+    function($log, $firebaseObject) {
+      return function() {
+        $log.warn('$FirebaseObject has been renamed. Use $firebaseObject instead.');
+        return $firebaseObject.apply(null, arguments);
+      };
+    }
+  ]);
 })();
 
 (function() {
@@ -1649,9 +1622,9 @@
     /** @deprecated */
     .factory("$firebase", function() {
       return function() {
-        throw new Error('$firebase has been removed. You may instantiate $FirebaseArray and $FirebaseObject ' +
+        throw new Error('$firebase has been removed. You may instantiate $firebaseArray and $firebaseObject ' +
         'directly now. For simple write operations, just use the Firebase ref directly. ' +
-        'See the AngularFire 1.0.0 changelog for details: https://www.firebase.com/docs/web/changelog.html');
+        'See the AngularFire 1.0.0 changelog for details: https://www.firebase.com/docs/web/libraries/angular/changelog.html');
       };
     });
 
@@ -1829,8 +1802,8 @@ if ( typeof Object.getPrototypeOf !== "function" ) {
   'use strict';
 
   angular.module('firebase')
-    .factory('$firebaseConfig', ["$FirebaseArray", "$FirebaseObject", "$injector",
-      function($FirebaseArray, $FirebaseObject, $injector) {
+    .factory('$firebaseConfig', ["$firebaseArray", "$firebaseObject", "$injector",
+      function($firebaseArray, $firebaseObject, $injector) {
         return function(configOpts) {
           // make a copy we can modify
           var opts = angular.extend({}, configOpts);
@@ -1843,8 +1816,8 @@ if ( typeof Object.getPrototypeOf !== "function" ) {
           }
           // extend defaults and return
           return angular.extend({
-            arrayFactory: $FirebaseArray,
-            objectFactory: $FirebaseObject
+            arrayFactory: $firebaseArray,
+            objectFactory: $firebaseObject
           }, opts);
         };
       }
